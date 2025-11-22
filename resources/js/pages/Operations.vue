@@ -21,7 +21,7 @@
                     <div class="header-actions">
                         <div class="refresh-indicator" :class="{ 'refreshing': loading }">
                             <div class="indicator-dot"></div>
-                            <span>Автообновление каждые 5 сек</span>
+                            <span>Автообновление</span>
                         </div>
                         <button class="btn btn-secondary" @click="loadOperations">
                             <i class="icon-refresh"></i>
