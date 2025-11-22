@@ -213,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 
@@ -346,6 +346,7 @@ const formatTime = (dateString) => {
 };
 
 const loadOperations = (page = 1) => {
+    loading.value = true;
     const params = {
         page,
         sort_by: sortBy.value,
@@ -358,6 +359,12 @@ const loadOperations = (page = 1) => {
     router.get('/operations', params, {
         preserveState: true,
         preserveScroll: true,
+        onFinish: () => {
+            loading.value = false;
+        },
+        onError: () => {
+            loading.value = false;
+        },
     });
 };
 
@@ -370,6 +377,21 @@ const handleLogout = async () => {
         window.location.href = '/login';
     }
 };
+
+// Синхронизация props с локальными переменными
+watch(() => props.operations, (newOperations) => {
+    operations.value = newOperations;
+}, { immediate: true });
+
+watch(() => props.pagination, (newPagination) => {
+    pagination.value = newPagination;
+}, { immediate: true, deep: true });
+
+watch(() => props.filters, (newFilters) => {
+    searchQuery.value = newFilters.search || '';
+    sortBy.value = newFilters.sortBy || 'created_at';
+    sortOrder.value = newFilters.sortOrder || 'desc';
+}, { immediate: true, deep: true });
 
 onMounted(() => {
     operations.value = props.operations;
@@ -386,6 +408,9 @@ onMounted(() => {
 onUnmounted(() => {
     if (refreshInterval) {
         clearInterval(refreshInterval);
+    }
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
     }
 });
 </script>

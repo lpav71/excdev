@@ -33,31 +33,13 @@ class OperationsController extends Controller
             $page
         );
 
-        // Логируем для отладки
-        Log::info('OperationsController: Request', [
-            'user_id' => $user->id,
-            'ajax' => $request->ajax(),
-            'wantsJson' => $request->wantsJson(),
-            'page' => $page,
-            'search' => $search,
-            'sort_by' => $sortBy,
-            'sort_order' => $sortOrder,
-            'operations_total' => $operations->total(),
-            'operations_count' => $operations->count(),
-        ]);
-
         $formatted = $this->balanceService->formatPaginatedOperationsForApi($operations);
-        
-        Log::info('OperationsController: Returning Inertia response', [
-            'operations_count' => count($formatted['operations']),
-            'pagination' => $formatted['pagination'],
-        ]);
         
         return Inertia::render('Operations', [
             'operations' => $formatted['operations'],
             'pagination' => $formatted['pagination'],
             'filters' => [
-                'search' => $search,
+                'search' => $search ?? '',
                 'sortBy' => $sortBy,
                 'sortOrder' => $sortOrder,
             ]
