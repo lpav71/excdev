@@ -17,7 +17,7 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
         
-        return view('balance.dashboard', [
+        return inertia('Dashboard', [
             'balance' => $this->balanceService->getUserBalance($user),
             'operations' => $this->balanceService->formatOperationsForApi(
                 $this->balanceService->getRecentOperations($user)
