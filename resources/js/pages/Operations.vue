@@ -662,7 +662,7 @@ onUnmounted(() => {
     border-radius: 12px;
     font-size: 1rem;
     background: rgba(255, 255, 255, 0.1);
-    color: white;
+    color: #2a2fa8;
     cursor: pointer;
     transition: all 0.3s ease;
 }
