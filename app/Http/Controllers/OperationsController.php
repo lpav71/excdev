@@ -6,6 +6,7 @@ use App\Services\BalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
 class OperationsController extends Controller
 {
@@ -45,23 +46,21 @@ class OperationsController extends Controller
             'operations_count' => $operations->count(),
         ]);
 
-        // Всегда возвращаем JSON - Vue компонент всегда делает AJAX запрос при монтировании
-        // Если это прямой переход (без AJAX), все равно возвращаем JSON, 
-        // так как Vue компонент сделает свой AJAX запрос
         $formatted = $this->balanceService->formatPaginatedOperationsForApi($operations);
         
-        Log::info('OperationsController: Returning JSON', [
+        Log::info('OperationsController: Returning Inertia response', [
             'operations_count' => count($formatted['operations']),
             'pagination' => $formatted['pagination'],
         ]);
         
-        // Если это не AJAX запрос, возвращаем HTML страницу
-        // Но Vue компонент все равно сделает AJAX запрос при монтировании
-        if (!$request->ajax() && !$request->wantsJson() && !$request->hasAny(['page', 'search', 'sort_by', 'sort_order'])) {
-            Log::info('OperationsController: Returning HTML view (first load)');
-            return view('balance.operations');
-        }
-        
-        return response()->json($formatted);
+        return Inertia::render('Operations', [
+            'operations' => $formatted['operations'],
+            'pagination' => $formatted['pagination'],
+            'filters' => [
+                'search' => $search,
+                'sortBy' => $sortBy,
+                'sortOrder' => $sortOrder,
+            ]
+        ]);
     }
 }
