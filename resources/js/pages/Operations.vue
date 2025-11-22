@@ -347,6 +347,7 @@ const formatTime = (dateString) => {
 
 const loadOperations = (page = 1) => {
     loading.value = true;
+    
     const params = {
         page,
         sort_by: sortBy.value,
@@ -359,6 +360,11 @@ const loadOperations = (page = 1) => {
     router.get('/operations', params, {
         preserveState: true,
         preserveScroll: true,
+        only: ['operations', 'pagination', 'filters'],
+        replace: true,
+        onSuccess: () => {
+            loading.value = false;
+        },
         onFinish: () => {
             loading.value = false;
         },
@@ -378,20 +384,31 @@ const handleLogout = async () => {
     }
 };
 
-// Синхронизация props с локальными переменными
+// Синхронизация props с локальными переменными (без immediate, чтобы избежать лишних обновлений)
 watch(() => props.operations, (newOperations) => {
-    operations.value = newOperations;
-}, { immediate: true });
+    if (JSON.stringify(operations.value) !== JSON.stringify(newOperations)) {
+        operations.value = newOperations;
+    }
+});
 
 watch(() => props.pagination, (newPagination) => {
-    pagination.value = newPagination;
-}, { immediate: true, deep: true });
+    if (JSON.stringify(pagination.value) !== JSON.stringify(newPagination)) {
+        pagination.value = { ...newPagination };
+    }
+}, { deep: true });
 
+// Фильтры обновляем только если они действительно изменились
 watch(() => props.filters, (newFilters) => {
-    searchQuery.value = newFilters.search || '';
-    sortBy.value = newFilters.sortBy || 'created_at';
-    sortOrder.value = newFilters.sortOrder || 'desc';
-}, { immediate: true, deep: true });
+    if (searchQuery.value !== (newFilters.search || '')) {
+        searchQuery.value = newFilters.search || '';
+    }
+    if (sortBy.value !== (newFilters.sortBy || 'created_at')) {
+        sortBy.value = newFilters.sortBy || 'created_at';
+    }
+    if (sortOrder.value !== (newFilters.sortOrder || 'desc')) {
+        sortOrder.value = newFilters.sortOrder || 'desc';
+    }
+}, { deep: true });
 
 onMounted(() => {
     operations.value = props.operations;
