@@ -207,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import axios from 'axios';
 
@@ -348,12 +348,12 @@ const loadOperations = (page = 1) => {
         params.search = searchQuery.value;
     }
 
-    // Автообновление без изменения состояния загрузки
-    router.reload({
+    // Используем router.get для обновления данных
+    router.get('/operations', params, {
         only: ['operations', 'pagination', 'filters'],
-        data: params,
         preserveScroll: true,
-        preserveState: true
+        preserveState: true,
+        replace: true
     });
 };
 
@@ -395,6 +395,20 @@ onMounted(() => {
         }
     });
 });
+
+// Обновляем данные при изменении props от Inertia
+const updateFromProps = () => {
+    operations.value = props.operations;
+    pagination.value = props.pagination;
+    searchQuery.value = props.filters.search || '';
+    sortBy.value = props.filters.sortBy || 'created_at';
+    sortOrder.value = props.filters.sortOrder || 'desc';
+};
+
+// Следим за изменениями props
+watch(() => props.operations, updateFromProps);
+watch(() => props.pagination, updateFromProps);
+watch(() => props.filters, updateFromProps);
 </script>
 
 <style scoped>
