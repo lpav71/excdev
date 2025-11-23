@@ -28,7 +28,7 @@ yarn-error.log
 /.zed
 /.osp
 /.github
-/.tests
+/tests
 tests/
 composer.lock
 package-lock.json
