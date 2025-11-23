@@ -39,13 +39,13 @@ php artisan user:add --name="Иван Иванов" --email="ivan@example.com" -
 
 **Без очереди (синхронно):**
 ```bash
-php artisan balance:operation --login="ivan" --type="deposit" --amount="1000" --description="Начисление бонусов"
-php artisan balance:operation --login="ivan" --type="withdrawal" --amount="500" --description="Оплата услуг"
+php artisan balance:operation --login=ivan --type=deposit --amount=1000 --description="Начисление бонусов"
+php artisan balance:operation --login=ivan --type=withdrawal --amount=500 --description="Оплата услуг"
 ```
 
 **С очередью (асинхронно):**
 ```bash
-php artisan balance:operation --login="ivan" --type="deposit" --amount="1000" --description="Начисление бонусов" --queue
+php artisan balance:operation --login=ivan --type=deposit --amount=1000 --description="Начисление бонусов" --queue
 ```
 
 Для обработки очереди запустите:
@@ -56,8 +56,8 @@ php artisan queue:work
 ### Веб-интерфейс
 
 - **Логин:** `/balance/login`
-- **Главная страница:** `/balance/dashboard` (показывает баланс и последние 5 операций, обновляется каждые 5 секунд)
-- **История операций:** `/balance/operations` (с поиском и сортировкой)
+- **Главная страница:** `/` (показывает баланс и последние 5 операций, обновляется каждые 5 секунд)
+- **История операций:** `/operations` (с поиском и сортировкой)
 
 ## Структура базы данных
 
@@ -73,4 +73,5 @@ php artisan queue:work
 - Bootstrap 5
 - SCSS
 - Laravel Queues (для асинхронной обработки операций)
+- Inertia.js (для SPA-интерфейса)
 

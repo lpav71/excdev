@@ -19,7 +19,7 @@
                         </p>
                     </div>
                     <div class="header-actions">
-                        <div class="refresh-indicator" :class="{ 'refreshing': loading }">
+                        <div class="refresh-indicator">
                             <div class="indicator-dot"></div>
                             <span>Автообновление</span>
                         </div>
@@ -98,14 +98,8 @@
 
                 <!-- Список операций -->
                 <section class="operations-section">
-                    <!-- Состояние загрузки -->
-                    <div v-if="loading" class="loading-state">
-                        <div class="loading-spinner"></div>
-                        <p>Загрузка операций...</p>
-                    </div>
-
                     <!-- Состояние пустого списка -->
-                    <div v-else-if="operations.length === 0" class="empty-state">
+                    <div v-if="operations.length === 0" class="empty-state">
                         <div class="empty-icon">
                             <i class="icon-document"></i>
                         </div>
@@ -118,7 +112,7 @@
                     </div>
 
                     <!-- Сетка операций -->
-                    <div v-else class="operations-grid">
+                    <div v-if="operations.length > 0" class="operations-grid">
                         <div
                             v-for="operation in operations"
                             :key="operation.id"
@@ -213,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { router } from '@inertiajs/vue3';
 import axios from 'axios';
 
@@ -241,26 +235,9 @@ const searchQuery = ref(props.filters.search || '');
 const sortBy = ref(props.filters.sortBy || 'created_at');
 const sortOrder = ref(props.filters.sortOrder || 'desc');
 const pagination = ref(props.pagination);
-const loading = ref(false);
 
 let searchTimeout = null;
 let refreshInterval = null;
-let lastRefreshTime = null;
-let consecutiveErrors = 0;
-let userActivityTimer = null;
-let isTabActive = true;
-
-// Конфигурация умного автообновления
-const refreshConfig = {
-    baseInterval: 15000, // Базовый интервал 15 секунд
-    activeInterval: 10000, // 10 секунд при активном пользователе
-    idleInterval: 30000, // 30 секунд при неактивном пользователе
-    maxInterval: 120000, // Максимальный интервал 2 минуты
-    errorBackoffMultiplier: 2,
-    maxConsecutiveErrors: 3,
-    minOperationsForReducedRefresh: 50, // Уменьшить частоту для больших наборов данных
-    userActivityTimeout: 30000 // 30 секунд неактивности
-};
 
 const handleSearch = () => {
     if (searchTimeout) {
@@ -361,12 +338,7 @@ const formatTime = (dateString) => {
     });
 };
 
-const loadOperations = (page = 1, isAutoRefresh = false) => {
-    // Пропустить если уже загружается, чтобы предотвратить дублирующие запросы
-    if (loading.value && !isAutoRefresh) return;
-    
-    loading.value = true;
-
+const loadOperations = (page = 1) => {
     const params = {
         page,
         sort_by: sortBy.value,
@@ -376,27 +348,12 @@ const loadOperations = (page = 1, isAutoRefresh = false) => {
         params.search = searchQuery.value;
     }
 
-    // Добавить параметр для обхода кэша при автообновлении
-    if (isAutoRefresh) {
-        params._t = Date.now();
-    }
-
-    router.get('/operations', params, {
-        preserveState: true,
-        preserveScroll: true,
+    // Автообновление без изменения состояния загрузки
+    router.reload({
         only: ['operations', 'pagination', 'filters'],
-        replace: true,
-        onSuccess: () => {
-            loading.value = false;
-            lastRefreshTime = Date.now();
-        },
-        onFinish: () => {
-            loading.value = false;
-        },
-        onError: () => {
-            loading.value = false;
-            consecutiveErrors++;
-        },
+        data: params,
+        preserveScroll: true,
+        preserveState: true
     });
 };
 
@@ -410,110 +367,13 @@ const handleLogout = async () => {
     }
 };
 
-// Синхронизация props с локальными переменными (без immediate, чтобы избежать лишних обновлений)
-watch(() => props.operations, (newOperations) => {
-    if (JSON.stringify(operations.value) !== JSON.stringify(newOperations)) {
-        operations.value = newOperations;
-    }
-});
 
-watch(() => props.pagination, (newPagination) => {
-    if (JSON.stringify(pagination.value) !== JSON.stringify(newPagination)) {
-        pagination.value = { ...newPagination };
-    }
-}, { deep: true });
-
-// Фильтры обновляем только если они действительно изменились
-watch(() => props.filters, (newFilters) => {
-    if (searchQuery.value !== (newFilters.search || '')) {
-        searchQuery.value = newFilters.search || '';
-    }
-    if (sortBy.value !== (newFilters.sortBy || 'created_at')) {
-        sortBy.value = newFilters.sortBy || 'created_at';
-    }
-    if (sortOrder.value !== (newFilters.sortOrder || 'desc')) {
-        sortOrder.value = newFilters.sortOrder || 'desc';
-    }
-}, { deep: true });
-
-// Функции умного автообновления
-const calculateRefreshInterval = () => {
-    // Базовый интервал на основе размера набора данных
-    let interval = pagination.value.total > refreshConfig.minOperationsForReducedRefresh
-        ? refreshConfig.baseInterval * 1.5
-        : refreshConfig.baseInterval;
-
-    // Корректировка на основе активности пользователя
-    if (!isTabActive) {
-        interval = refreshConfig.idleInterval;
-    } else if (isUserActive()) {
-        interval = refreshConfig.activeInterval;
-    }
-
-    // Применить экспоненциальную задержку при ошибках
-    if (consecutiveErrors > 0) {
-        interval = Math.min(
-            interval * Math.pow(refreshConfig.errorBackoffMultiplier, consecutiveErrors),
-            refreshConfig.maxInterval
-        );
-    }
-
-    return interval;
-};
-
-const isUserActive = () => {
-    return Date.now() - (lastRefreshTime || 0) < refreshConfig.userActivityTimeout;
-};
-
-const checkForUpdates = async () => {
-    if (!isTabActive) return;
-
-    try {
-        // Использовать легковесную проверку новых операций
-        const response = await axios.get('/operations', {
-            params: {
-                page: 1,
-                per_page: 5, // Проверить последние 5 операций для лучшей точности
-                sort_by: 'created_at',
-                sort_order: 'desc'
-            }
-        });
-
-        const latestOperations = response.data.operations || [];
-        const currentOperations = operations.value.slice(0, 5);
-        
-        // Проверить, есть ли новые операции
-        const hasNewOperations = latestOperations.some(latestOp =>
-            !currentOperations.some(currentOp => currentOp.id === latestOp.id)
-        );
-
-        if (hasNewOperations || pagination.value.current_page === 1) {
-            await loadOperations(pagination.value.current_page, true);
-        }
-
-        consecutiveErrors = 0;
-        lastRefreshTime = Date.now();
-
-    } catch (error) {
-        console.error('Ошибка автообновления:', error);
-        consecutiveErrors++;
-        
-        if (consecutiveErrors >= refreshConfig.maxConsecutiveErrors) {
-            console.warn('Превышено максимальное количество ошибок, приостанавливаем автообновление');
-            stopRefresh();
-        }
-    }
-};
-
+// Автообновление как на главной странице
 const startRefresh = () => {
     stopRefresh();
-    
-    const interval = calculateRefreshInterval();
-    console.log(`Запуск автообновления с интервалом ${interval/1000} секунд`);
-    
     refreshInterval = setInterval(() => {
-        checkForUpdates();
-    }, interval);
+        loadOperations(pagination.value.current_page);
+    }, 5000);
 };
 
 const stopRefresh = () => {
@@ -523,75 +383,16 @@ const stopRefresh = () => {
     }
 };
 
-const handleUserActivity = () => {
-    if (userActivityTimer) {
-        clearTimeout(userActivityTimer);
-    }
-    
-    userActivityTimer = setTimeout(() => {
-        // Пользователь стал неактивным, скорректировать частоту обновления
-        startRefresh();
-    }, refreshConfig.userActivityTimeout);
-};
-
-const handleVisibilityChange = () => {
-    isTabActive = !document.hidden;
-    
-    if (isTabActive) {
-        // Вкладка стала активной - обновить немедленно и перезапустить
-        loadOperations(pagination.value.current_page);
-        startRefresh();
-    } else {
-        // Вкладка стала неактивной - уменьшить частоту обновления
-        startRefresh();
-    }
-};
-
-const initializeSmartRefresh = () => {
-    // Настроить отслеживание активности пользователя
-    ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
-        document.addEventListener(event, handleUserActivity, { passive: true });
-    });
-
-    // Настроить отслеживание видимости вкладки
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Запустить систему автообновления
-    startRefresh();
-};
-
-const cleanupRefreshSystem = () => {
-    stopRefresh();
-    
-    if (searchTimeout) {
-        clearTimeout(searchTimeout);
-    }
-    
-    if (userActivityTimer) {
-        clearTimeout(userActivityTimer);
-    }
-    
-    // Удалить обработчики событий
-    ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
-        document.removeEventListener(event, handleUserActivity);
-    });
-    
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-};
-
 onMounted(() => {
-    operations.value = props.operations;
-    pagination.value = props.pagination;
-    searchQuery.value = props.filters.search || '';
-    sortBy.value = props.filters.sortBy || 'created_at';
-    sortOrder.value = props.filters.sortOrder || 'desc';
+    // Запустить простое автообновление как на главной странице
+    startRefresh();
 
-    // Инициализировать умное автообновление
-    initializeSmartRefresh();
-
-    // Очистка событий при размонтировании
+    // Очистка при размонтировании
     onUnmounted(() => {
-        cleanupRefreshSystem();
+        stopRefresh();
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+        }
     });
 });
 </script>
@@ -715,10 +516,6 @@ onMounted(() => {
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.refresh-indicator.refreshing .indicator-dot {
-    background: #10b981;
-    animation: pulse 1.5s infinite;
-}
 
 .indicator-dot {
     width: 8px;
@@ -901,26 +698,6 @@ onMounted(() => {
 /* Секция операций */
 .operations-section {
     min-height: 400px;
-}
-
-/* Состояние загрузки */
-.loading-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 2rem;
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.loading-spinner {
-    width: 48px;
-    height: 48px;
-    border: 3px solid rgba(25, 255, 255, 0.3);
-    border-top: 3px solid white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 1rem;
 }
 
 /* Состояние пустого списка */
