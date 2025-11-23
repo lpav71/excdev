@@ -15,9 +15,24 @@ class BalanceService
     public function getRecentOperations(User $user, int $limit = 5): Collection
     {
         return $user->operations()
+            ->select(['id', 'type', 'amount', 'description', 'created_at'])
             ->latest()
             ->take($limit)
             ->get();
+    }
+
+    /**
+     * Форматировать операцию для API
+     */
+    private function formatOperationForApi($operation): array
+    {
+        return [
+            'id' => $operation->id,
+            'type' => $operation->type,
+            'amount' => (float) $operation->amount,
+            'description' => $operation->description,
+            'created_at' => $operation->created_at->format('Y-m-d H:i:s'),
+        ];
     }
 
     /**
@@ -25,24 +40,19 @@ class BalanceService
      */
     public function formatOperationsForApi(Collection $operations): array
     {
-        return $operations->map(function ($operation) {
-            return [
-                'id' => $operation->id,
-                'type' => $operation->type,
-                'amount' => (float) $operation->amount,
-                'description' => $operation->description,
-                'created_at' => $operation->created_at->format('Y-m-d H:i:s'),
-            ];
-        })->toArray();
+        return $operations->map(fn($operation) => $this->formatOperationForApi($operation))->toArray();
     }
 
     /**
-     * Получить баланс пользователя
+     * Получить баланс пользователя с кэшированием
      */
     public function getUserBalance(User $user): float
     {
-        $balance = $user->balance;
-        return $balance ? (float) $balance->amount : 0.0;
+        return cache()->remember(
+            "user_balance_{$user->id}",
+            now()->addMinutes(5),
+            fn() => (float) $user->operations()->sum('amount')
+        );
     }
 
     /**
@@ -56,21 +66,19 @@ class BalanceService
         int $page = 1,
         int $perPage = 20
     ): LengthAwarePaginator {
-        $query = $user->operations();
+        $query = $user->operations()->select(['id', 'type', 'amount', 'description', 'created_at']);
 
         // Поиск по описанию
         if ($search) {
-            $query->where('description', 'like', '%' . $search . '%');
+            $query->where('description', 'like', '%' . addcslashes($search, '%_') . '%');
         }
 
         // Валидация и применение сортировки
         $sortOrder = in_array($sortOrder, ['asc', 'desc']) ? $sortOrder : 'desc';
-        
-        if (in_array($sortBy, ['created_at', 'amount', 'type', 'description'])) {
-            $query->orderBy($sortBy, $sortOrder);
-        } else {
-            $query->orderBy('created_at', 'desc');
-        }
+        $allowedSortFields = ['created_at', 'amount', 'type', 'description'];
+        $sortBy = in_array($sortBy, $allowedSortFields) ? $sortBy : 'created_at';
+
+        $query->orderBy($sortBy, $sortOrder);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }
@@ -81,15 +89,7 @@ class BalanceService
     public function formatPaginatedOperationsForApi(LengthAwarePaginator $operations): array
     {
         return [
-            'operations' => collect($operations->items())->map(function ($operation) {
-                return [
-                    'id' => $operation->id,
-                    'type' => $operation->type,
-                    'amount' => (float) $operation->amount,
-                    'description' => $operation->description,
-                    'created_at' => $operation->created_at->format('Y-m-d H:i:s'),
-                ];
-            })->toArray(),
+            'operations' => collect($operations->items())->map(fn($operation) => $this->formatOperationForApi($operation))->toArray(),
             'pagination' => [
                 'current_page' => $operations->currentPage(),
                 'last_page' => $operations->lastPage(),
