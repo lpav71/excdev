@@ -214,7 +214,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue';
-import { router, usePage } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import axios from 'axios';
 
 const props = defineProps({
@@ -347,7 +347,7 @@ const formatTime = (dateString) => {
 
 const loadOperations = (page = 1) => {
     loading.value = true;
-    
+
     const params = {
         page,
         sort_by: sortBy.value,
@@ -417,22 +417,90 @@ onMounted(() => {
     sortBy.value = props.filters.sortBy || 'created_at';
     sortOrder.value = props.filters.sortOrder || 'desc';
 
-    refreshInterval = setInterval(() => {
-        loadOperations(pagination.value.current_page);
-    }, 10000);
-});
+    // Улучшенное автообновление с экспоненциальной задержкой
+    const refreshConfig = {
+        interval: 10000, // Базовый интервал 10 секунд
+        maxInterval: 60000, // Максимальный интервал 60 секунд
+        currentInterval: 10000,
+        attempts: 0,
+        maxAttempts: 3
+    };
 
-onUnmounted(() => {
-    if (refreshInterval) {
-        clearInterval(refreshInterval);
-    }
-    if (searchTimeout) {
-        clearTimeout(searchTimeout);
-    }
+    const startRefresh = () => {
+        if (refreshInterval) clearInterval(refreshInterval);
+
+        refreshInterval = setInterval(async () => {
+            try {
+                // Проверяем, есть ли новые операции
+                const response = await axios.get('/operations', {
+                    params: {
+                        page: 1,
+                        per_page: 1,
+                        sort_by: 'created_at',
+                        sort_order: 'desc'
+                    }
+                });
+
+                const latestOperationId = response.data.operations[0]?.id;
+                const currentFirstOperationId = operations.value[0]?.id;
+
+                // Если есть новые операции или это первая страница, обновляем
+                if (latestOperationId !== currentFirstOperationId || pagination.value.current_page === 1) {
+                    loadOperations(pagination.value.current_page);
+                    // Сбрасываем интервал при успешном обновлении
+                    refreshConfig.currentInterval = refreshConfig.interval;
+                    refreshConfig.attempts = 0;
+                }
+
+            } catch (error) {
+                console.error('Ошибка автообновления:', error);
+                // Экспоненциальная задержка при ошибках
+                refreshConfig.attempts++;
+                if (refreshConfig.attempts <= refreshConfig.maxAttempts) {
+                    refreshConfig.currentInterval = Math.min(
+                        refreshConfig.interval * Math.pow(2, refreshConfig.attempts),
+                        refreshConfig.maxInterval
+                    );
+                }
+
+                console.log(`Следующая попытка автообновления через ${refreshConfig.currentInterval/1000} секунд`);
+            }
+        }, refreshConfig.currentInterval);
+    };
+
+    startRefresh();
+
+    // Дополнительно проверяем активность вкладки
+    let isPageVisible = true;
+
+    const handleVisibilityChange = () => {
+        isPageVisible = !document.hidden;
+        if (isPageVisible) {
+            // При возврате на вкладку - принудительное обновление
+            loadOperations(pagination.value.current_page);
+            // Перезапускаем автообновление
+            startRefresh();
+        }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Очистка событий при размонтировании
+    onUnmounted(() => {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+        }
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+    });
 });
 </script>
 
 <style scoped>
+
+/* Fix for Vite compilation issue */
 /* Base Styles */
 .operations-history {
     min-height: 100vh;
@@ -751,7 +819,7 @@ onUnmounted(() => {
 .loading-spinner {
     width: 48px;
     height: 48px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
+    border: 3px solid rgba(25, 255, 255, 0.3);
     border-top: 3px solid white;
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -789,7 +857,7 @@ onUnmounted(() => {
     backdrop-filter: blur(20px);
     border-radius: 20px;
     padding: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(25, 255, 255, 0.2);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
     transition: all 0.3s ease;
     position: relative;
@@ -812,14 +880,6 @@ onUnmounted(() => {
     transition: all 0.3s ease;
 }
 
-.operation-card.deposit::before {
-    background: linear-gradient(135deg, #10b981, #059669);
-}
-
-.operation-card.withdrawal::before {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-}
-
 .card-header {
     display: flex;
     justify-content: space-between;
@@ -835,18 +895,6 @@ onUnmounted(() => {
     border-radius: 20px;
     font-size: 0.85rem;
     font-weight: 600;
-}
-
-.operation-type-badge.deposit {
-    background: rgba(16, 185, 129, 0.2);
-    color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.operation-type-badge.withdrawal {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .operation-date {
@@ -892,14 +940,6 @@ onUnmounted(() => {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-}
-
-.amount-indicator.deposit {
-    background: #10b981;
-}
-
-.amount-indicator.withdrawal {
-    background: #ef4444;
 }
 
 .card-footer {
@@ -974,7 +1014,7 @@ onUnmounted(() => {
 
 .page-btn {
     padding: 0.75rem 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(25, 25, 255, 0.2);
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.9);
@@ -1005,8 +1045,7 @@ onUnmounted(() => {
 
 /* Icons */
 [class^="icon-"] {
-    font-family: 'Icons' !important;
-    speak: never;
+    font-family: 'Icons',serif !important;
     font-style: normal;
     font-weight: normal;
     font-variant: normal;

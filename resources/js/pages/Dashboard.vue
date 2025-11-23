@@ -182,7 +182,7 @@ let refreshInterval = null;
 const loadData = async () => {
     try {
         loading.value = true;
-        await router.reload({ only: ['balance', 'operations'] });
+        router.reload({ only: ['balance', 'operations'] });
     } catch (error) {
         console.error('Ошибка загрузки данных:', error);
     } finally {
@@ -703,7 +703,7 @@ onUnmounted(() => {
     font-size: 0.8rem;
     color: rgba(255, 255, 255, 0.6);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
 }
 
 /* Stats Section */
@@ -781,8 +781,7 @@ onUnmounted(() => {
 }
 
 [class^="icon-"] {
-    font-family: 'Icons' !important;
-    speak: never;
+    font-family: 'Icons',serif !important;
     font-style: normal;
     font-weight: normal;
     font-variant: normal;
@@ -797,8 +796,6 @@ onUnmounted(() => {
 .icon-wallet:before { content: "💰"; }
 .icon-arrow-right:before { content: "→"; }
 .icon-document:before { content: "📄"; }
-.icon-arrow-up:before { content: "⬆️"; }
-.icon-arrow-down:before { content: "⬇️"; }
 .icon-trend-up:before { content: "📈"; }
 .icon-trend-down:before { content: "📉"; }
 .icon-activity:before { content: "💹"; }
