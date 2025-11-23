@@ -598,7 +598,6 @@ onMounted(() => {
 
 <style scoped>
 
-/* Исправление проблемы компиляции Vite */
 /* Базовые стили */
 .operations-history {
     min-height: 100vh;
@@ -991,8 +990,20 @@ onMounted(() => {
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.operation-type-badge.deposit {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.operation-type-badge.withdrawal {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .operation-date {
